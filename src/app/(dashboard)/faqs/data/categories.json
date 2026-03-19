@@ -1,0 +1,9 @@
+[
+  { "name": "All", "count": 30 },
+  { "name": "Getting Started", "count": 5 },
+  { "name": "The ML Pipeline", "count": 7 },
+  { "name": "Interpreting Results", "count": 6 },
+  { "name": "Data & Privacy", "count": 4 },
+  { "name": "API & Integration", "count": 5 },
+  { "name": "Billing & Plans", "count": 3 }
+]

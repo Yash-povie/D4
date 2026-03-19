@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "title": "95.2% Model Accuracy",
+    "description": "Stage 2 Toxicity Screening validated on 14,791+ samples from peer-reviewed studies.",
+    "icon": "Target"
+  },
+  {
+    "id": 2,
+    "title": "3-Stage Pipeline",
+    "description": "Aggregation → Toxicity Screening → Mechanistic Cytotoxicity — the full biological journey modelled in seconds.",
+    "icon": "FlaskConical"
+  },
+  {
+    "id": 3,
+    "title": "Explainable AI",
+    "description": "RAG-powered LLM translates every prediction into plain scientific language with mechanistic reasoning.",
+    "icon": "BookOpen"
+  },
+  {
+    "id": 4,
+    "title": "Regulatory Ready",
+    "description": "Timestamped, versioned prediction records for FDA/EMA in-silico dossier support.",
+    "icon": "Shield"
+  }
+]

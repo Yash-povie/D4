@@ -1,0 +1,182 @@
+[
+  {
+    "id": 1,
+    "question": "What is NanoToxi AI?",
+    "answer": "NanoToxi AI is a next-generation in-silico safety assessment platform for nanotechnology. It allows pharmaceutical companies, biotech startups, and material scientists to predict the toxicity of a nanoparticle before it ever enters a wet lab — saving time, cost, and avoiding ethical complexity of animal testing.",
+    "category": "Getting Started"
+  },
+  {
+    "id": 2,
+    "question": "How do I run my first prediction?",
+    "answer": "Navigate to the 'Nano-Toxicity Engine' in the sidebar, fill in your nanoparticle's physicochemical properties (core size, zeta potential, surface area, bandgap, dosage, exposure time), and click 'Run Prediction'. Results appear within seconds.",
+    "category": "Getting Started"
+  },
+  {
+    "id": 3,
+    "question": "Do I need a wet lab to use NanoToxi AI?",
+    "answer": "No. NanoToxi AI is a fully in-silico platform — all you need are the physicochemical parameters of your nanoparticle (commonly available from the synthesis protocol or materials datasheet). No biological assay is required to get a prediction.",
+    "category": "Getting Started"
+  },
+  {
+    "id": 4,
+    "question": "Can I run predictions in bulk?",
+    "answer": "Yes. The Nano-Toxicity Engine supports batch Excel upload. Prepare a .xlsx file where each row represents one nanoparticle with the required columns. The platform processes each row through the full 3-stage pipeline and returns your file with an added 'toxicity_prediction' column.",
+    "category": "Getting Started"
+  },
+  {
+    "id": 5,
+    "question": "What particle types does NanoToxi AI support?",
+    "answer": "NanoToxi AI was trained on 14,791+ validated samples across 6 categories: Metal Oxides (TiO₂, ZnO, CeO₂), Noble Metals (Au, Ag), Carbon-based (CNT, graphene), Polymeric NPs, Quantum Dots, and Dendrimers.",
+    "category": "Getting Started"
+  },
+  {
+    "id": 6,
+    "question": "What is the 3-Stage Ensemble Pipeline?",
+    "answer": "The pipeline mimics the biological journey of a nanoparticle. Stage 1 (Aggregation Dynamics) predicts how the particle clusters in biological fluids. Stage 2 (Toxicity Screening) makes a high-accuracy binary SAFE/TOXIC call. Stage 3 (Mechanistic Cytotoxicity) provides deep-dive analysis of cell death pathways — ROS generation, apoptosis, and necrosis.",
+    "category": "The ML Pipeline"
+  },
+  {
+    "id": 7,
+    "question": "What is the model's accuracy?",
+    "answer": "Stage 2 (Toxicity Screening) achieves 95.2% accuracy on our held-out validation set. The mean confidence score across all user predictions is currently 95.2%. All predictions include an explicit confidence score so you can judge uncertainty yourself.",
+    "category": "The ML Pipeline"
+  },
+  {
+    "id": 8,
+    "question": "What does the Aggregation Factor mean?",
+    "answer": "The Aggregation Factor (Stage 1) represents how much larger the effective particle diameter becomes in a biological fluid compared to its primary core size. A factor of 1.0 means no aggregation; anything above 2.0 is considered significant and increases effective cellular dosage.",
+    "category": "The ML Pipeline"
+  },
+  {
+    "id": 9,
+    "question": "What is Zeta Shift?",
+    "answer": "Zeta Shift is the predicted change in surface charge (mV) when the particle transitions from buffer to a biological medium with proteins. Large negative shifts indicate protein corona formation and can destabilize colloidal suspension.",
+    "category": "The ML Pipeline"
+  },
+  {
+    "id": 10,
+    "question": "What is Hydrodynamic Diameter?",
+    "answer": "Hydrodynamic Diameter (Stage 1 output) is the predicted effective diameter of the nanoparticle-protein corona complex in biological fluid, measured in nanometers. It differs from Core Size because it accounts for aggregation and adsorbed biomolecules.",
+    "category": "The ML Pipeline"
+  },
+  {
+    "id": 11,
+    "question": "What ML models power the pipeline?",
+    "answer": "The pipeline uses a gradient-boosted ensemble (XGBoost + Random Forest) for Stage 1 and 2, and a feedforward neural network for Stage 3. The ensemble architecture averages predictions from multiple independent models to improve robustness and reduce variance.",
+    "category": "The ML Pipeline"
+  },
+  {
+    "id": 12,
+    "question": "How often are the models retrained?",
+    "answer": "Models are retrained quarterly using accumulated community-contributed datasets and newly published nanotoxicology studies. Each retrain is version-tagged in the API /health endpoint so you always know which model version produced your result.",
+    "category": "The ML Pipeline"
+  },
+  {
+    "id": 13,
+    "question": "How should I interpret the Confidence Score?",
+    "answer": "The Confidence Score is the ensemble model's certainty in the SAFE/TOXIC binary call. A score above 90% is considered high confidence. Scores between 70–90% suggest the particle lies near the decision boundary — we recommend repeating with slightly varied parameters or validating in vitro.",
+    "category": "Interpreting Results"
+  },
+  {
+    "id": 14,
+    "question": "What does 'TOXIC' actually mean?",
+    "answer": "'TOXIC' means the model predicts cell viability will fall below the safety threshold (typically <70% viability at the given dosage and exposure time) based on patterns learned from validated cytotoxicity assays. It is a statistical prediction, not a guarantee — always validate high-risk particles in vitro.",
+    "category": "Interpreting Results"
+  },
+  {
+    "id": 15,
+    "question": "What is ROS Generation?",
+    "answer": "Reactive Oxygen Species (ROS) Generation score estimates the likelihood that the nanoparticle will induce oxidative stress in cells. Values above 60% indicate significant oxidative potential, which is the primary driver of apoptotic cell death for many metal oxide nanoparticles.",
+    "category": "Interpreting Results"
+  },
+  {
+    "id": 16,
+    "question": "What is the difference between Apoptosis and Necrosis?",
+    "answer": "Apoptosis is programmed, controlled cell death (caspase-mediated) — cells die 'cleanly' without triggering inflammation. Necrosis is uncontrolled cell death caused by severe damage, which releases cellular contents and triggers inflammation. High necrosis scores are considered more severe from a safety standpoint.",
+    "category": "Interpreting Results"
+  },
+  {
+    "id": 17,
+    "question": "Can I use NanoToxi AI results in regulatory filings (FDA/EMA)?",
+    "answer": "NanoToxi AI predictions can serve as supporting in-silico evidence in preclinical dossiers. However, they do not replace mandatory in vitro and in vivo testing required by FDA/EMA guidelines. All predictions are timestamped and version-tagged in the Research Archive for audit trail purposes.",
+    "category": "Interpreting Results"
+  },
+  {
+    "id": 18,
+    "question": "What does the AI Explanation section say?",
+    "answer": "The AI Explanation is powered by a RAG (Retrieval-Augmented Generation) LLM that interprets the numeric prediction outputs in plain scientific language. It explains the probable mechanisms behind a TOXIC call, cites the dominant pathway, and provides actionable suggestions (e.g. surface modification strategies). It is designed for researchers who may not be ML experts.",
+    "category": "Interpreting Results"
+  },
+  {
+    "id": 19,
+    "question": "Who owns the data I submit?",
+    "answer": "You retain full ownership of all data you submit to NanoToxi AI. We use submitted prediction inputs only to improve the model if you explicitly opt in to the Community Data Contribution programme. We never sell or share your data with third parties.",
+    "category": "Data & Privacy"
+  },
+  {
+    "id": 20,
+    "question": "Is my research data secure?",
+    "answer": "Yes. All data is encrypted in transit (TLS 1.3) and at rest (AES-256). The platform is hosted on ISO 27001-certified infrastructure. We are GDPR-compliant and data never leaves your designated region.",
+    "category": "Data & Privacy"
+  },
+  {
+    "id": 21,
+    "question": "Can I delete my prediction history?",
+    "answer": "Yes. You can delete individual records or your entire Research Archive from account settings at any time. Deletion is permanent and irreversible.",
+    "category": "Data & Privacy"
+  },
+  {
+    "id": 22,
+    "question": "How long is prediction history retained?",
+    "answer": "Prediction history is retained for the lifetime of your account. On account deletion, all data is permanently purged within 30 days.",
+    "category": "Data & Privacy"
+  },
+  {
+    "id": 23,
+    "question": "How do I get an API key?",
+    "answer": "Navigate to 'API & Lab Integration' in the sidebar, click 'Create New API Key', give it a descriptive name (e.g. Lab Automation Script), and click Generate. Your key is shown once — copy it immediately and store it securely.",
+    "category": "API & Integration"
+  },
+  {
+    "id": 24,
+    "question": "What is the rate limit for the API?",
+    "answer": "Starter plans: 100 predictions/day. Research plans: 1,000/day. Enterprise: unlimited. Batch Excel uploads count as one call per row. Rate limit headers are returned with every response.",
+    "category": "API & Integration"
+  },
+  {
+    "id": 25,
+    "question": "Can I integrate NanoToxi AI with my LIMS?",
+    "answer": "Yes. The REST API is designed to integrate with any Laboratory Information Management System (LIMS) that supports outbound HTTP calls. Use the POST /predict endpoint with your LIMS's automated sample data and receive structured JSON results.",
+    "category": "API & Integration"
+  },
+  {
+    "id": 26,
+    "question": "What format does the API return?",
+    "answer": "All responses are JSON. The structure includes stage1 (aggregation metrics), stage2 (toxicity_prediction, confidence, risk_score), and stage3 (cytotoxicity pathway metrics). See the Interactive Docs in the API & Integration page for the full schema.",
+    "category": "API & Integration"
+  },
+  {
+    "id": 27,
+    "question": "Is there an SDK available?",
+    "answer": "A Python SDK is currently in beta. It wraps the REST API with typed dataclasses and batch utilities. Sign up for early access at support@nanotoxi.com.",
+    "category": "API & Integration"
+  },
+  {
+    "id": 28,
+    "question": "What plans are available?",
+    "answer": "NanoToxi AI offers three tiers: Starter (individual researchers, 100 predictions/day), Research (labs and teams, 1,000/day + batch upload + Research Archive), and Enterprise (unlimited predictions, API access, priority support, audit trails for regulatory filings). See the Pricing page for details.",
+    "category": "Billing & Plans"
+  },
+  {
+    "id": 29,
+    "question": "Do you offer academic discounts?",
+    "answer": "Yes. Academic institutions and non-profit research organisations qualify for a 40% discount on all plans. Contact us at billing@nanotoxi.com with your institutional email.",
+    "category": "Billing & Plans"
+  },
+  {
+    "id": 30,
+    "question": "Is there a free trial?",
+    "answer": "Yes. All new accounts receive a 14-day free trial of the Research plan with 50 predictions included. No credit card required to start.",
+    "category": "Billing & Plans"
+  }
+]
