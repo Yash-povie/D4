@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import * as XLSX from "xlsx"
 import {
   FlaskConical,
   Zap,
@@ -14,6 +15,7 @@ import {
   ChevronUp,
   Atom,
   BookOpen,
+  FileSpreadsheet,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -145,6 +147,8 @@ export default function ToxicityEnginePage() {
   const [batchFile, setBatchFile] = React.useState<File | null>(null)
   const [batchLoading, setBatchLoading] = React.useState(false)
   const [batchProgress, setBatchProgress] = React.useState(0)
+  const [batchStatus, setBatchStatus] = React.useState("")
+  const [batchError, setBatchError] = React.useState<string | null>(null)
 
   // Form state — single particle fields
   const [nanoparticleId, setNanoparticleId] = React.useState("")
@@ -202,25 +206,203 @@ export default function ToxicityEnginePage() {
     }
   }
 
-  const handleBatchUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBatchUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       setBatchFile(e.target.files[0])
+      setBatchError(null)
     }
+  }
+
+  /** Flexible column resolver — accepts several naming conventions */
+  function resolveCol(row: Record<string, unknown>, ...candidates: string[]): number | null {
+    for (const key of Object.keys(row)) {
+      const kl = key.toLowerCase().replace(/[\s_\-()²µ]/g, "")
+      for (const c of candidates) {
+        if (kl === c.toLowerCase().replace(/[\s_\-()²µ]/g, "")) {
+          const v = Number(row[key])
+          return isNaN(v) ? null : v
+        }
+      }
+    }
+    return null
+  }
+
+  function resolveStr(row: Record<string, unknown>, ...candidates: string[]): string {
+    for (const key of Object.keys(row)) {
+      const kl = key.toLowerCase().replace(/[\s_\-()²µ]/g, "")
+      for (const c of candidates) {
+        if (kl === c.toLowerCase().replace(/[\s_\-()²µ]/g, "")) {
+          return String(row[key] ?? "")
+        }
+      }
+    }
+    return ""
   }
 
   const handleBatchRun = async () => {
     if (!batchFile) return
     setBatchLoading(true)
     setBatchProgress(0)
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise((r) => setTimeout(r, 150))
-      setBatchProgress(i)
+    setBatchError(null)
+    setBatchStatus("Reading file…")
+
+    try {
+      // 1 — Read Excel file
+      const buffer = await batchFile.arrayBuffer()
+      const wb = XLSX.read(buffer, { type: "array" })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
+
+      if (rows.length === 0) {
+        setBatchError("The uploaded file has no data rows.")
+        setBatchLoading(false)
+        return
+      }
+
+      setBatchStatus(`Processing ${rows.length} nanoparticles…`)
+
+      // 2 — Run predictions row-by-row
+      const results: Record<string, unknown>[] = []
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i]
+
+        const core_size      = resolveCol(row, "core_size_nm", "coresize", "core size", "size_nm", "diameter_nm", "size")
+        const zeta_potential = resolveCol(row, "zeta_potential_mv", "zetapotential", "zeta potential", "zeta_mv", "zeta")
+        const surface_area   = resolveCol(row, "surface_area_m2g", "surfacearea", "surface area", "bet_m2g", "sa_m2g")
+        const bandgap_energy = resolveCol(row, "bandgap_energy_ev", "bandgapenergy", "bandgap energy", "bandgap_ev", "bandgap")
+        const dosage         = resolveCol(row, "dosage_ugml", "dosage", "dose_ugml", "dose", "concentration_ugml", "conc")
+        const exposure_time  = resolveCol(row, "exposure_time_h", "exposuretime", "exposure time", "time_h", "time")
+        const env_pH         = resolveCol(row, "ph", "environmentalpH", "environmental_ph")
+        const corona_raw     = resolveStr(row, "protein_corona", "proteincorona", "corona")
+        const protein_corona = corona_raw.toLowerCase() === "true" || corona_raw === "1" || corona_raw.toLowerCase() === "yes"
+        const np_id          = resolveStr(row, "nanoparticle_id", "np_id", "id", "particle_id", "name")
+
+        // Validate required fields
+        if (core_size == null || zeta_potential == null || surface_area == null ||
+            bandgap_energy == null || dosage == null || exposure_time == null) {
+          results.push({
+            ...row,
+            Toxicity_Prediction: "ERROR",
+            Cytotoxicity_Result: "ERROR",
+            Confidence_pct: "",
+            Risk_Score: "",
+            Aggregation_Factor: "",
+            Hydrodynamic_Diameter_nm: "",
+            ROS_Generation_pct: "",
+            Apoptosis_Likelihood_pct: "",
+            Necrosis_Likelihood_pct: "",
+            Primary_Mechanism: "",
+            Explanation: "Missing required column(s). Check template.",
+          })
+          setBatchProgress(Math.round(((i + 1) / rows.length) * 100))
+          continue
+        }
+
+        // Call /api/predict (uses internal engine as fallback)
+        try {
+          const res = await fetch("/api/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nanoparticle_id: np_id || `NP-${i + 1}`,
+              core_size, zeta_potential, surface_area,
+              bandgap_energy, dosage, exposure_time,
+              bioContext: env_pH != null || protein_corona,
+              ...(env_pH != null ? { environmental_pH: env_pH } : {}),
+              protein_corona,
+            }),
+          })
+          const data = await res.json()
+          const s2 = (data.stage2 || {}) as Record<string, unknown>
+          const s3 = (data.stage3 || {}) as Record<string, unknown>
+          results.push({
+            ...row,
+            Toxicity_Prediction:      s2.toxicity_prediction ?? "",
+            Cytotoxicity_Result:      data.cytotoxicity_result ?? "",
+            Risk_Score:               s2.risk_score ?? "",
+            Aggregation_Factor:       (data.stage1 as Record<string, unknown>)?.aggregation_factor ?? "",
+            Hydrodynamic_Diameter_nm: (data.stage1 as Record<string, unknown>)?.hydrodynamic_diameter ?? "",
+            ROS_Generation_pct:       s3.ros_generation ?? "",
+            Apoptosis_Likelihood_pct: s3.apoptosis_likelihood ?? "",
+            Necrosis_Likelihood_pct:  s3.necrosis_likelihood ?? "",
+            Primary_Mechanism:        s3.primary_pathway ?? "",
+            Explanation:              data.explanation_short ?? data.explanation ?? "",
+          })
+        } catch {
+          results.push({ ...row, Toxicity_Prediction: "ERROR", Explanation: "API call failed" })
+        }
+
+        setBatchProgress(Math.round(((i + 1) / rows.length) * 100))
+        setBatchStatus(`Processing ${i + 1} / ${rows.length}…`)
+      }
+
+      // 3 — Build output Excel
+      setBatchStatus("Building output file…")
+      const outWb = XLSX.utils.book_new()
+      const outWs = XLSX.utils.json_to_sheet(results)
+
+      // Style header row (bold) — xlsx community edition supports limited styling
+      const range = XLSX.utils.decode_range(outWs["!ref"] || "A1")
+      const resultCols = [
+        "Toxicity_Prediction", "Cytotoxicity_Result", "Confidence_pct", "Risk_Score",
+        "Aggregation_Factor", "Hydrodynamic_Diameter_nm", "ROS_Generation_pct",
+        "Apoptosis_Likelihood_pct", "Necrosis_Likelihood_pct", "Primary_Mechanism", "Explanation",
+      ]
+      // Set column widths
+      const colWidths = Object.keys(results[0] || {}).map((k) =>
+        ({ wch: resultCols.includes(k) ? 22 : Math.max(k.length + 2, 14) })
+      )
+      outWs["!cols"] = colWidths
+
+      XLSX.utils.book_append_sheet(outWb, outWs, "Predictions")
+
+      // 4 — Trigger download
+      const toxicCount    = results.filter((r) => r.Toxicity_Prediction === "TOXIC").length
+      const safeCount     = results.filter((r) => r.Toxicity_Prediction === "SAFE").length
+      const origName      = batchFile.name.replace(/\.(xlsx?)/i, "")
+      const outName       = `${origName}_NanoToxi_Results.xlsx`
+      XLSX.writeFile(outWb, outName)
+
+      setBatchStatus(`Done — ${toxicCount} TOXIC, ${safeCount} SAFE out of ${rows.length} particles.`)
+      setBatchProgress(100)
+    } catch (err) {
+      setBatchError(err instanceof Error ? err.message : "Batch processing failed")
+    } finally {
+      setBatchLoading(false)
     }
-    setBatchLoading(false)
-    setBatchProgress(0)
-    setBatchFile(null)
-    // In production: trigger Excel download with toxicity_prediction column
-    alert("Batch complete! Your Excel file with toxicity predictions has been downloaded.")
+  }
+
+  /** Generate and download a blank template Excel */
+  const handleDownloadTemplate = () => {
+    const templateRows = [
+      {
+        Nanoparticle_ID: "NP-001",
+        Core_Size_nm: 25,
+        Zeta_Potential_mV: -28.4,
+        Surface_Area_m2g: 150,
+        Bandgap_Energy_eV: 3.2,
+        Dosage_ugmL: 50,
+        Exposure_Time_h: 24,
+        pH: 7.4,
+        Protein_Corona: "FALSE",
+      },
+      {
+        Nanoparticle_ID: "NP-002",
+        Core_Size_nm: 10,
+        Zeta_Potential_mV: 15,
+        Surface_Area_m2g: 220,
+        Bandgap_Energy_eV: 1.8,
+        Dosage_ugmL: 200,
+        Exposure_Time_h: 48,
+        pH: 6.5,
+        Protein_Corona: "TRUE",
+      },
+    ]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(templateRows)
+    ws["!cols"] = Object.keys(templateRows[0]).map((k) => ({ wch: Math.max(k.length + 2, 16) }))
+    XLSX.utils.book_append_sheet(wb, ws, "NanoToxi_Input")
+    XLSX.writeFile(wb, "NanoToxi_Batch_Template.xlsx")
   }
 
   return (
@@ -624,39 +806,64 @@ export default function ToxicityEnginePage() {
             <CardHeader>
               <CardTitle className="text-base">Batch Excel Prediction</CardTitle>
               <CardDescription>
-                Upload an <code>.xlsx</code> file where each row is a nanoparticle with the same columns as the single-particle form. The engine will run POST /predict per row and return your file with an added <code>toxicity_prediction</code> column.
+                Upload an <code>.xlsx</code> file — one nanoparticle per row. The engine runs the full 3-stage pipeline on each row and returns the same file with toxicity and cytotoxicity result columns appended.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center gap-3 text-center hover:border-primary/50 transition-colors">
+              {/* Drop zone */}
+              <label
+                htmlFor="batch-file"
+                className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center gap-3 text-center hover:border-primary/50 transition-colors cursor-pointer"
+              >
                 <Upload className="size-8 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Drop your Excel file here</p>
+                  <p className="text-sm font-medium">Click to select or drop Excel file here</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Supports .xlsx and .xls</p>
                 </div>
                 <Input
                   id="batch-file"
                   type="file"
                   accept=".xlsx,.xls"
-                  className="max-w-[200px]"
+                  className="hidden"
                   onChange={handleBatchUpload}
                 />
-              </div>
+              </label>
 
-              {batchFile && (
+              {/* Selected file */}
+              {batchFile && !batchLoading && batchProgress < 100 && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-                  <CheckCircle2 className="size-4 text-green-500 shrink-0" />
+                  <FileSpreadsheet className="size-4 text-green-500 shrink-0" />
                   <span className="truncate">{batchFile.name}</span>
                 </div>
               )}
 
+              {/* Progress */}
               {batchLoading && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Processing rows…</span>
+                    <span>{batchStatus}</span>
                     <span>{batchProgress}%</span>
                   </div>
                   <Progress value={batchProgress} />
+                </div>
+              )}
+
+              {/* Success state */}
+              {!batchLoading && batchProgress === 100 && batchStatus && (
+                <div className="flex items-start gap-2 text-sm bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md px-3 py-2.5">
+                  <CheckCircle2 className="size-4 text-green-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium text-green-700 dark:text-green-400">Download ready</p>
+                    <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">{batchStatus}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Error */}
+              {batchError && (
+                <div className="flex items-start gap-2 text-sm bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2.5">
+                  <AlertCircle className="size-4 text-destructive mt-0.5 shrink-0" />
+                  <p className="text-destructive">{batchError}</p>
                 </div>
               )}
 
@@ -666,13 +873,28 @@ export default function ToxicityEnginePage() {
                 onClick={handleBatchRun}
               >
                 {batchLoading ? (
-                  <><Loader2 className="size-4 mr-2 animate-spin" /> Processing…</>
+                  <><Loader2 className="size-4 mr-2 animate-spin" /> {batchStatus || "Processing…"}</>
                 ) : (
                   <><Zap className="size-4 mr-2" /> Run Batch Prediction</>
                 )}
               </Button>
 
-              <Button variant="outline" className="w-full" size="sm">
+              <Separator />
+
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground font-medium">Required columns in your Excel:</p>
+                <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                  {[
+                    "Core_Size_nm", "Zeta_Potential_mV", "Surface_Area_m2g",
+                    "Bandgap_Energy_eV", "Dosage_ugmL", "Exposure_Time_h",
+                  ].map((c) => (
+                    <code key={c} className="bg-muted px-1.5 py-0.5 rounded text-[11px]">{c}</code>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Optional: <code className="bg-muted px-1 rounded text-[11px]">Nanoparticle_ID</code>, <code className="bg-muted px-1 rounded text-[11px]">pH</code>, <code className="bg-muted px-1 rounded text-[11px]">Protein_Corona</code></p>
+              </div>
+
+              <Button variant="outline" className="w-full" size="sm" onClick={handleDownloadTemplate}>
                 <Download className="size-4 mr-2" />
                 Download Template Excel
               </Button>

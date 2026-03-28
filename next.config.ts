@@ -5,6 +5,20 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["lucide-react", "@radix-ui/react-icons", "recharts", "date-fns"],
   },
 
+  // xlsx (SheetJS) uses Node.js built-ins — stub them for the client bundle
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        stream: false,
+        crypto: false,
+      }
+    }
+    return config
+  },
+
   // Image optimization
   images: {
     remotePatterns: [
